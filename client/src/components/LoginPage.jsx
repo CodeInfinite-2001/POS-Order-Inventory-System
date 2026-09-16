@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { ShoppingBag, Lock, User, KeyRound, AlertCircle, ArrowRight, Shield } from 'lucide-react';
+import { ShoppingBag, User, KeyRound, AlertCircle, ArrowRight } from 'lucide-react';
 import { api } from '../api/client';
 
 export default function LoginPage({ onLoginSuccess }) {
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('admin123');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -21,12 +21,6 @@ export default function LoginPage({ onLoginSuccess }) {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleFillDemo = (u, p) => {
-    setUsername(u);
-    setPassword(p);
-    setError('');
   };
 
   return (
@@ -71,7 +65,7 @@ export default function LoginPage({ onLoginSuccess }) {
                   required
                   value={username}
                   onChange={e => setUsername(e.target.value)}
-                  placeholder="e.g. admin or cashier1"
+                  placeholder="Enter your username"
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
                 />
               </div>
@@ -107,29 +101,6 @@ export default function LoginPage({ onLoginSuccess }) {
               </button>
             </div>
           </form>
-
-          {/* Quick Demo Credentials Info */}
-          <div className="mt-6 pt-5 border-t border-slate-800 text-xs text-slate-400 space-y-2">
-            <div className="flex items-center gap-1.5 font-semibold text-slate-300">
-              <Shield className="w-3.5 h-3.5 text-blue-400" />
-              Default Administrator Account:
-            </div>
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/50 border border-slate-700/50">
-              <div className="font-mono text-[11px] text-slate-300">
-                admin &bull; admin123
-              </div>
-              <button
-                type="button"
-                onClick={() => handleFillDemo('admin', 'admin123')}
-                className="text-blue-400 hover:text-blue-300 font-medium text-[11px]"
-              >
-                Use Admin
-              </button>
-            </div>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              * Note: Only administrator accounts can create and register new users.
-            </p>
-          </div>
         </div>
       </div>
     </div>
