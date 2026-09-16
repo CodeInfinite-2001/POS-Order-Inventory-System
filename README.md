@@ -1,49 +1,89 @@
-# 🚀 POS Order & Inventory System
+# 🚀 Concurrency-Safe POS Order & Inventory System
 
-A high-performance, concurrency-safe Point-of-Sale (POS) backend and modern React frontend with atomic stock reservation, automated 5-minute expiry, mock payment processing (success, failure, timeout), idempotency guards, full order lifecycle handling, and an interactive real-time race condition simulator.
+A production-grade, concurrency-safe Point-of-Sale (POS) system built with **Express.js**, **MongoDB**, and a modern **React (Vite + Tailwind CSS)** frontend. 
 
----
-
-## 🏗️ Architecture & Core Components
-
-```
-                        ┌─────────────────────────────────────────┐
-                        │      React.js POS Frontend (Vite)       │
-                        │  Storefront • Inventory • Orders • Sim  │
-                        └───────────────────┬─────────────────────┘
-                                            │ HTTP / JSON
-                                            ▼
-                        ┌─────────────────────────────────────────┐
-                        │           Express.js REST API           │
-                        │  Product • Order • Payment Controllers  │
-                        └───────┬──────────────────────┬──────────┘
-                                │                      │
-                ┌───────────────▼──────────┐   ┌───────▼─────────────────┐
-                │     InventoryService     │   │   5-Min Expiry Worker   │
-                │ Atomic $gte Stock Guards │   │ Background Poller (5s)  │
-                └───────────────┬──────────┘   └───────┬─────────────────┘
-                                │                      │
-                                └───────────┬──────────┘
-                                            ▼
-                        ┌─────────────────────────────────────────┐
-                        │                 MongoDB                 │
-                        │  Products • Orders • Idempotent Payments│
-                        └─────────────────────────────────────────┘
-```
+The system features **atomic stock reservations**, **compensating rollback transactions**, a **dual-layer 5-minute reservation expiry engine**, **mock payment processing with idempotency guards**, **role-based user authentication (User & Admin)** with **admin-only user registration**, **LKR currency formatting**, and an interactive **real-time race condition stress simulator**.
 
 ---
 
-## ⚡ Concurrency Handling & Zero-Overselling Guarantee
+## 📑 Table of Contents
 
-In point-of-sale environments, multiple customers or checkout terminals frequently attempt to purchase the exact same limited-inventory item simultaneously. Naive "read-then-write" patterns cause race conditions leading to negative stock and overselling.
+- [Key Highlights](#-key-highlights)
+- [System Architecture](#️-system-architecture)
+- [Concurrency & Overselling Prevention](#-concurrency--overselling-prevention)
+- [Order Lifecycle & 5-Minute Stock Lock](#-order-lifecycle--5-minute-stock-lock)
+- [Authentication & Role-Based Access Control](#-authentication--role-based-access-control)
+- [Mock Payment Gateway & Idempotency](#-mock-payment-gateway--idempotency)
+- [Currency Formatting (LKR)](#-currency-formatting-lkr)
+- [REST API Reference](#-rest-api-reference)
+- [Automated Testing & Concurrency Verification](#-automated-testing--concurrency-verification)
+- [Local Setup & Getting Started](#-local-setup--getting-started)
+- [Production Deployment (Docker & Cloud)](#-production-deployment-docker--cloud)
 
-### The Atomic Solution:
-Every reservation request executes an atomic conditional update guarded by available stock:
+---
+
+## 🌟 Key Highlights
+
+- **Zero-Overselling Concurrency Engine**: Guaranteed stock safety using MongoDB atomic conditional updates (`{ availableStock: { $gte: quantity } }`).
+- **5-Minute Stock Reservation**: Items added to checkout are temporarily reserved for 300 seconds. Abandoned reservations auto-expire via a background cron worker or lazy on-access checks.
+- **Role-Based Authentication (User vs. Admin)**:
+  - Secure password hashing via Node.js built-in `crypto.pbkdf2Sync` (SHA-512, 10,000 iterations, 16-byte random salt).
+  - Tamper-proof HMAC-SHA256 bearer tokens.
+  - **Admin-Exclusive Signup**: Only administrators can register new user accounts; all credentials and permissions are persisted in MongoDB.
+- **Idempotent Payment Processing**: Prevents double-billing using unique `idempotencyKey` indexing with simulated outcomes (`success`, `failure`, `timeout`).
+- **Dismissible Checkout Modal**: Easily close or return to the storefront after paying or cancelling reservations.
+- **Localized Sri Lankan Rupee (LKR)**: All catalog items, cart subtotals, order ledgers, and checkout totals are formatted as `LKR X,XXX.XX`.
+- **Zero-Config Database**: Automatically spins up an embedded in-memory MongoDB replica set if no `MONGODB_URI` is provided.
+
+---
+
+## 🏗️ System Architecture
+
+```
+                          ┌─────────────────────────────────────────┐
+                          │       React POS Frontend (Vite)         │
+                          │   Storefront • Cart • Orders • Users    │
+                          └───────────────────┬─────────────────────┘
+                                              │ HTTPS / JSON (Bearer Token)
+                                              ▼
+                          ┌─────────────────────────────────────────┐
+                          │           Express.js REST API           │
+                          │  Auth • Products • Orders • Payments    │
+                          └───────┬──────────────────────┬──────────┘
+                                  │                      │
+                  ┌───────────────▼──────────┐   ┌───────▼─────────────────┐
+                  │     InventoryService     │   │   5-Min Expiry Worker   │
+                  │ Atomic $gte Stock Guards │   │ Background Poller (5s)  │
+                  └───────────────┬──────────┘   └───────┬─────────────────┘
+                                  │                      │
+                                  └───────────┬──────────┘
+                                              ▼
+                          ┌─────────────────────────────────────────┐
+                          │                 MongoDB                 │
+                          │   Users • Products • Orders • Payments  │
+                          └─────────────────────────────────────────┘
+```
+
+---
+
+## ⚡ Concurrency & Overselling Prevention
+
+In high-volume POS flash sales, simultaneous customer checkouts against low-stock inventory cause race conditions in naive "read-calculate-write" architectures.
+
+### The Atomic Solution
+The system decouples inventory tracking into three metrics:
+- `stock`: Physical inventory count.
+- `reservedStock`: Units locked in active, uncompleted checkout sessions.
+- `availableStock`: Items free to be purchased (`stock - reservedStock`).
+
+Every stock reservation is executed as an **atomic conditional mutation** at the document level:
+
 ```javascript
+// server/src/services/inventoryService.js
 const updated = await Product.findOneAndUpdate(
   {
     _id: productId,
-    availableStock: { $gte: requestedQty } // Strict concurrency guard
+    availableStock: { $gte: requestedQty } // Atomic conditional guard
   },
   {
     $inc: {
@@ -58,113 +98,195 @@ if (!updated) {
   throw new OutOfStockError('Insufficient stock for requested item');
 }
 ```
-- **Document-Level Serialization**: Single-document updates in MongoDB are strictly atomic. When 25 requests arrive simultaneously for 5 items, exactly 5 match and decrement; the remaining 20 fail cleanly with `400 OutOfStock`.
-- **Multi-Item Cart Rollbacks**: If a multi-product order fails on item $k$, all items $1 \dots k-1$ reserved in that transaction are automatically rolled back.
+
+### Multi-Item Compensating Rollbacks
+When an order includes multiple distinct products and item $N$ fails stock availability checks, the system triggers an automated compensating rollback loop, immediately releasing all previously locked items $1 \dots N-1$.
 
 ---
 
-## ⏱️ 5-Minute Stock Reservation & Automated Expiry
-
-- **Lock on Checkout**: The moment a customer proceeds to checkout, an order is created with status `Reserved` and an `expiresAt` timestamp set to `now + 5 minutes` (300 seconds).
-- **Dual-Layer Expiry**:
-  1. **Active Background Worker (`expiryWorker.js`)**: Runs every 5 seconds, finds all orders with `status: 'Reserved'` and `expiresAt <= now`, atomically transitions them to `Expired`, and returns locked stock to `availableStock`.
-  2. **Passive / Lazy Check (`orderService.js`)**: Any query or payment attempt against an expired reservation triggers immediate expiration and rejects the payment.
-
----
-
-## 💳 Mock Payment Gateway & Idempotency
-
-Supports 3 simulated payment outcomes:
-1. **🟢 Success (`outcome: 'success'`)**:
-   - Order transitions `Reserved` $\to$ `Paid`.
-   - Permanently finalizes inventory (`stock: -qty, reservedStock: -qty`).
-2. **🔴 Failure (`outcome: 'failure'`)**:
-   - Order transitions `Reserved` $\to$ `Failed`.
-   - Immediately restores inventory back to available stock (`availableStock: +qty, reservedStock: -qty`).
-3. **🟡 Timeout (`outcome: 'timeout'`)**:
-   - Simulates gateway network timeout.
-   - Order transitions `Reserved` $\to$ `Expired`, releasing locked stock back to available inventory.
-
-### Duplicate Prevention & Idempotency:
-- Every payment request includes an `Idempotency-Key` (in header or payload).
-- A unique index on `Payment.idempotencyKey` prevents duplicate transaction entries.
-- If a client resubmits the same key (e.g. double-click or network retry), the gateway returns the cached transaction response without double-charging or corrupting inventory.
-
----
-
-## 🔄 Order Lifecycle State Machine
+## ⏱️ Order Lifecycle & 5-Minute Stock Lock
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Reserved: Cart Checkout (5-min Stock Lock)
-    Reserved --> Paid: Payment Success (Stock Finalized)
-    Reserved --> Failed: Payment Failed (Stock Restored)
-    Reserved --> Expired: 5m Timeout (Stock Restored)
-    Reserved --> Cancelled: User Cancel (Stock Restored)
+    [*] --> Reserved: Checkout Started (Stock Locked)
+    Reserved --> Paid: Payment Successful (Stock Finalized)
+    Reserved --> Failed: Payment Declined (Stock Restored)
+    Reserved --> Expired: 5-Min Timer Reached 0 (Stock Restored)
+    Reserved --> Cancelled: User Cancelled (Stock Restored)
     Paid --> [*]
     Failed --> [*]
     Expired --> [*]
     Cancelled --> [*]
 ```
 
+### Dual-Layer Expiry Engine
+1. **Active Background Worker (`expiryWorker.js`)**: Runs every 5000ms. Queries `{ status: 'Reserved', expiresAt: { $lte: now } }`, updates status to `Expired`, and releases stock back to available inventory.
+2. **Passive Lazy Evaluation (`orderService.js`)**: Any query or payment submission checking an expired order triggers immediate expiration and stock release on access.
+
 ---
 
-## 🧪 Testing & Verification
+## 🔐 Authentication & Role-Based Access Control
 
-### 1. Automated Test Suites (Jest)
-Run all 9 unit and integration tests covering concurrency, lifecycle, and payments:
+### Security Specifications
+- **Password Storage**: `crypto.pbkdf2Sync(plainPassword, salt, 10000, 64, 'sha512')`. Raw passwords are never stored.
+- **Session Tokens**: Tamper-proof HMAC-SHA256 bearer tokens with 24-hour expiration.
+- **Permissions**:
+  - `admin`: Full system control (Storefront, Orders, Inventory Management, **User Accounts Signup**, Concurrency Simulator).
+  - `user` (Cashier): Access to Storefront, Cart Checkout, and Order Operations.
+
+### Admin-Only User Registration
+Regular users cannot register accounts (`POST /api/auth/users` returns `403 Forbidden`). Only authenticated administrators can create new users via the **User Accounts** console or REST API.
+
+> [!NOTE]
+> **Default Initial Administrator**:
+> On first boot, the system auto-seeds an administrator account if zero users exist in the database:
+> - **Username**: `admin`
+> - **Password**: `admin123`
+
+---
+
+## 💳 Mock Payment Gateway & Idempotency
+
+### Supported Gateway Outcomes
+- **🟢 Success**: Finalizes physical stock (`stock: -qty, reservedStock: -qty`), transitions order to `Paid`.
+- **🔴 Failure**: Immediately releases reserved items back to available inventory, transitions order to `Failed`.
+- **🟡 Timeout**: Simulates payment timeout; releases stock back to inventory and transitions order to `Expired`.
+
+### Duplicate Transaction Prevention
+All payment requests accept an `idempotencyKey`. A unique database index on `Payment.idempotencyKey` prevents duplicate transaction entries. Duplicate submissions return the cached transaction response without double-charging or deducting inventory twice.
+
+---
+
+## 🇱🇰 Currency Formatting (LKR)
+
+All monetary values are standardized to **Sri Lankan Rupees (LKR)**:
+- Catalog display: `LKR 385,000.00`
+- Checkout & Total Due: `LKR 28,500.00`
+- Form inputs in Inventory Management: `Price (LKR)`
+
+---
+
+## 📡 REST API Reference
+
+### Authentication & Users
+| Method | Endpoint | Access | Description |
+|---|---|---|---|
+| `POST` | `/api/auth/login` | Public | Authenticate username and password |
+| `GET` | `/api/auth/me` | User / Admin | Retrieve current authenticated user profile |
+| `POST` | `/api/auth/users` | **Admin Only** | Sign up a new user account with hashed password |
+| `GET` | `/api/auth/users` | **Admin Only** | List all registered users stored in database |
+
+### Products & Inventory
+| Method | Endpoint | Access | Description |
+|---|---|---|---|
+| `GET` | `/api/products` | User / Admin | List products with available and reserved counts |
+| `POST` | `/api/products` | Admin | Create a new catalog item |
+| `PUT` | `/api/products/:id` | Admin | Update item details or physical stock count |
+| `DELETE` | `/api/products/:id` | Admin | Remove product (blocked if units are reserved) |
+| `POST` | `/api/products/seed` | Admin | Seed default catalog with realistic LKR prices |
+
+### Orders & Reservations
+| Method | Endpoint | Access | Description |
+|---|---|---|---|
+| `POST` | `/api/orders` | User / Admin | Create order and atomically lock stock (5 min) |
+| `GET` | `/api/orders` | User / Admin | List all orders with status filter |
+| `GET` | `/api/orders/:id` | User / Admin | Fetch order details and state transition audit log |
+| `POST` | `/api/orders/:id/cancel`| User / Admin | Cancel reservation and release stock immediately |
+| `POST` | `/api/orders/:id/expire`| System / Admin | Manually expire reservation and restore stock |
+
+### Payments
+| Method | Endpoint | Access | Description |
+|---|---|---|---|
+| `POST` | `/api/payments/process` | User / Admin | Process mock payment with idempotency key |
+| `GET` | `/api/payments/order/:id` | User / Admin | Retrieve payment receipt for an order |
+
+---
+
+## 🧪 Automated Testing & Concurrency Verification
+
+### 1. Run All Jest Test Suites (15 Tests Passing)
 ```bash
 npm test
 ```
-- `tests/concurrency.test.js`: 25 simultaneous checkout requests competing for 5 items.
-- `tests/lifecycle.test.js`: Full lifecycle transitions and stock restoration.
-- `tests/payment.test.js`: Success, failure, timeout, and duplicate idempotency.
+- `server/tests/auth.test.js`: Admin seeding, login, RBAC enforcement, duplicate username rejection.
+- `server/tests/concurrency.test.js`: 25 simultaneous shoppers competing for 5 units $\rightarrow$ exactly 5 succeed, 20 rejected, 0 oversold.
+- `server/tests/lifecycle.test.js`: Stock reservation, manual cancellation, auto-expiry, and invalid state transitions.
+- `server/tests/payment.test.js`: Success, failure, timeout, and idempotency deduplication.
 
-### 2. Live Terminal Concurrency Stress Test
-Run the standalone CLI simulation script:
+### 2. Standalone CLI Concurrency Stress Test
+Run the standalone simulation script from the terminal:
 ```bash
-node server/scripts/simulateConcurrency.js [requests] [stock]
-# Example: 20 simultaneous shoppers for 5 items
-node server/scripts/simulateConcurrency.js 20 5
+node server/scripts/simulateConcurrency.js [shopperRequests] [availableStock]
+
+# Example: 25 shoppers competing for 5 laptops
+node server/scripts/simulateConcurrency.js 25 5
+```
+**Sample Output:**
+```text
+======================================================
+  🚀 POS CONCURRENCY & OVERSELLING STRESS TEST
+======================================================
+• Initial Stock Count:        5 units
+• Simultaneous Shoppers:      25 requests
+
+⚡ Blasting 25 checkout requests in parallel via Promise.all()...
+
+======================================================
+  📊 STRESS TEST RESULTS (Completed in 109ms)
+======================================================
+  Total Requests Executed:    25
+  Successful Orders Placed:   5  (Expected: 5)
+  Rejected (Out of Stock):    20  (Expected: 20)
+------------------------------------------------------
+  ✅ TEST PASSED: ZERO OVERSELLING OCCURRED!
+======================================================
 ```
 
-### 3. Interactive UI Concurrency Simulator
-Navigate to the **"Concurrency Attack Simulator"** tab in the React web dashboard:
-- Pick any product.
-- Select the number of simultaneous shoppers (5 to 50).
-- Click **"Launch Concurrent Attack"** to watch live race-condition resolution!
+### 3. Interactive Web Concurrency Simulator
+Admins can access the **"Concurrency Simulator"** tab in the web UI to test flash-sale conditions with between 5 and 50 simultaneous shoppers directly from the browser.
 
 ---
 
-## 🚀 Running Locally
+## 🚀 Local Setup & Getting Started
 
 ### Prerequisites
-- Node.js v18+ (tested on Node v20 LTS)
-- (Optional) MongoDB connection string via `MONGODB_URI`. If not set, the application automatically boots an embedded in-memory MongoDB replica set with zero configuration!
+- **Node.js**: v18+ (tested on Node v20 LTS)
+- *(Optional)* **MongoDB**: If `MONGODB_URI` is omitted, the app starts an embedded in-memory MongoDB replica set automatically.
 
-### Start Application
+### Installation
 ```bash
-# 1. Install dependencies
-cd server && npm install
-cd ../client && npm install
+# 1. Install server dependencies
+cd server
+npm install
 
-# 2. Build client
-npm run build:client
+# 2. Install client dependencies
+cd ../client
+npm install
 
-# 3. Start full-stack server
+# 3. Build the React frontend
+npm run build
+
+# 4. Launch the server
+cd ..
 npm start
 ```
-Access the application at `http://localhost:5000`.
+The application will be accessible at: **`http://localhost:5000`**
 
 ---
 
-## 📦 Deployment
+## 📦 Production Deployment (Docker & Cloud)
 
-### Docker Deployment
+### Multi-Stage Docker Build
 ```bash
-docker build -t pos-system .
-docker run -p 5000:5000 -e PORT=5000 pos-system
+# Build production image
+docker build -t pos-order-system .
+
+# Run container
+docker run -d -p 5000:5000 -e PORT=5000 --name pos-app pos-order-system
 ```
 
-### Render.com Deployment
-The repository includes a ready-to-use [`render.yaml`](file:///e:/POS%20Order%20&%20Inventory%20System/render.yaml) blueprint for 1-click cloud deployment.
+### Render.com Cloud Deployment
+The repository includes a [`render.yaml`](file:///e:/POS%20Order%20&%20Inventory%20System/render.yaml) blueprint:
+1. Push repository to GitHub.
+2. Link your repository in the Render.com dashboard.
+3. Select **Blueprint** deployment — Render will automatically build the client and deploy the Node.js backend.
