@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Trash2, Plus, Minus, ArrowRight, ShoppingCart, Lock } from 'lucide-react';
+import { formatLKR } from '../api/client';
 
 export default function CartDrawer({
   isOpen,
@@ -66,15 +67,15 @@ export default function CartDrawer({
                 return (
                   <div
                     key={item.productId}
-                    className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-800/60 border border-slate-700/50"
+                    className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-slate-800/60 border border-slate-700/50"
                   >
                     <div className="flex-1 min-w-0">
                       <h4 className="text-sm font-semibold text-white truncate">{item.name}</h4>
                       <p className="text-xs font-mono text-slate-400">
-                        ${item.price.toFixed(2)} each &bull; Avail: {currentAvailable}
+                        {formatLKR(item.price)} each &bull; Avail: {currentAvailable}
                       </p>
-                      <p className="text-xs font-bold text-blue-400 mt-1">
-                        ${(item.price * item.quantity).toFixed(2)}
+                      <p className="text-xs font-bold text-blue-400 mt-1 font-mono">
+                        {formatLKR(item.price * item.quantity)}
                       </p>
                     </div>
 
@@ -120,25 +121,25 @@ export default function CartDrawer({
           {cart.length > 0 && (
             <div className="p-5 border-t border-slate-800 bg-slate-900/90 space-y-4">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-400">Order Subtotal</span>
-                <span className="font-extrabold text-lg text-white">
-                  ${totalAmount.toFixed(2)}
+                <span className="text-slate-400 font-medium">Order Subtotal</span>
+                <span className="font-extrabold text-lg text-white font-mono">
+                  {formatLKR(totalAmount)}
                 </span>
               </div>
 
               {/* Informational stock lock note */}
-              <div className="flex items-start gap-2 p-2.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs">
+              <div className="flex items-start gap-2 p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs">
                 <Lock className="w-4 h-4 text-indigo-400 flex-shrink-0 mt-0.5" />
                 <span>
-                  Proceeding will lock inventory with a <strong>5-minute reservation</strong>,
-                  preventing other shoppers from claiming your items during payment.
+                  Proceeding locks inventory with a <strong>5-minute reservation</strong>,
+                  protecting your items during payment.
                 </span>
               </div>
 
               <div className="flex items-center gap-2">
                 <button
                   onClick={onClearCart}
-                  className="px-3 py-2.5 rounded-xl border border-slate-700 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                  className="px-3.5 py-2.5 rounded-xl border border-slate-700 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
                 >
                   Clear
                 </button>
@@ -151,7 +152,7 @@ export default function CartDrawer({
                     <span>Reserving Stock...</span>
                   ) : (
                     <>
-                      <span>Enter Checkout &amp; Lock Stock</span>
+                      <span>Lock Stock &amp; Checkout</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}

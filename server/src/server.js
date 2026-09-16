@@ -3,6 +3,7 @@ const http = require('http');
 const app = require('./app');
 const { connectDB, disconnectDB } = require('./config/db');
 const { startExpiryWorker, stopExpiryWorker } = require('./services/expiryWorker');
+const authService = require('./services/authService');
 
 const PORT = process.env.PORT || 5000;
 
@@ -10,6 +11,9 @@ async function bootstrap() {
   try {
     // 1. Connect to Database
     await connectDB();
+
+    // Seed default admin if no users exist
+    await authService.seedDefaultAdmin();
 
     // 2. Start background worker for 5-minute reservation cleanup
     const workerInterval = process.env.EXPIRY_WORKER_INTERVAL_MS

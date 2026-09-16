@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { api } from './api/client';
+import { api, getStoredUser, clearStoredAuth } from './api/client';
 import Header from './components/Header';
 import Storefront from './components/Storefront';
 import InventoryManager from './components/InventoryManager';
+import UserManager from './components/UserManager';
 import OrdersList from './components/OrdersList';
 import ConcurrencySimulator from './components/ConcurrencySimulator';
 import CartDrawer from './components/CartDrawer';
 import CheckoutModal from './components/CheckoutModal';
+import LoginPage from './components/LoginPage';
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState(() => getStoredUser());
   const [activeTab, setActiveTab] = useState('storefront');
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -24,6 +27,30 @@ export default function App() {
 
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Validate session on mount
+  useEffect(() => {
+    if (currentUser) {
+      api
+        .getMe()
+        .then(res => {
+          if (res.user) setCurrentUser(res.user);
+        })
+        .catch(() => {
+          clearStoredAuth();
+          setCurrentUser(null);
+        });
+    }
+  }, []);
+
+  // Restrict tab access if not admin
+  useEffect(() => {
+    if (currentUser && currentUser.role !== 'admin') {
+      if (['inventory', 'users', 'simulator'].includes(activeTab)) {
+        setActiveTab('storefront');
+      }
+    }
+  }, [currentUser, activeTab]);
 
   // Load products
   const fetchProducts = useCallback(async () => {
@@ -49,8 +76,9 @@ export default function App() {
     }
   }, []);
 
-  // Initial load and periodic refresh to keep stock and 5-min timer in sync
+  // Periodic refresh
   useEffect(() => {
+    if (!currentUser) return;
     fetchProducts();
     fetchOrders();
 
@@ -60,7 +88,16 @@ export default function App() {
     }, 4000);
 
     return () => clearInterval(interval);
-  }, [fetchProducts, fetchOrders]);
+  }, [currentUser, fetchProducts, fetchOrders]);
+
+  const handleLogout = () => {
+    api.logout();
+    setCurrentUser(null);
+    setCart([]);
+    setIsCartOpen(false);
+    setIsCheckoutModalOpen(false);
+    setActiveCheckoutOrder(null);
+  };
 
   // Cart operations
   const handleAddToCart = product => {
@@ -111,26 +148,25 @@ export default function App() {
     setCart([]);
   };
 
-  // Convert Cart to Reserved Order (Enters 5-Minute Checkout Lock)
+  // Convert Cart to Reserved Order (5-Minute Stock Lock)
   const handleProceedToCheckout = async () => {
     if (cart.length === 0) return;
     setIsReserving(true);
     setLastPaymentResult(null);
 
     try {
+      const customer = currentUser ? `${currentUser.name} (${currentUser.role})` : 'POS Cashier';
       const res = await api.createOrder({
         items: cart.map(item => ({ productId: item.productId, quantity: item.quantity })),
-        customerName: 'POS Cashier / Shopper',
+        customerName: customer,
         reservationDurationSec: 300, // 5 minutes
       });
 
-      // Clear cart, open checkout modal
       setCart([]);
       setIsCartOpen(false);
       setActiveCheckoutOrder(res.order);
       setIsCheckoutModalOpen(true);
 
-      // Refresh stock counts
       await fetchProducts();
       await fetchOrders();
     } catch (err) {
@@ -151,7 +187,6 @@ export default function App() {
     setIsProcessingPayment(true);
     try {
       if (simulateDuplicate) {
-        // Fire two simultaneous requests with the SAME idempotency key
         const [res1, res2] = await Promise.all([
           api.processPayment({ orderId, idempotencyKey, paymentMethod, outcome }),
           api.processPayment({ orderId, idempotencyKey, paymentMethod, outcome }),
@@ -196,6 +231,7 @@ export default function App() {
       await api.cancelOrder(orderId, 'User cancelled checkout');
       setIsCheckoutModalOpen(false);
       setActiveCheckoutOrder(null);
+      setLastPaymentResult(null);
       await fetchProducts();
       await fetchOrders();
     } catch (err) {
@@ -209,6 +245,7 @@ export default function App() {
       await api.expireOrder(orderId, '5-minute timer reached 0:00');
       setIsCheckoutModalOpen(false);
       setActiveCheckoutOrder(null);
+      setLastPaymentResult(null);
       await fetchProducts();
       await fetchOrders();
     } catch (err) {
@@ -245,14 +282,10 @@ export default function App() {
     }
   };
 
-  const handleSeedCatalog = async () => {
-    try {
-      await api.seedProducts();
-      await fetchProducts();
-    } catch (err) {
-      alert(`Failed to seed demo catalog: ${err.message}`);
-    }
-  };
+  // If unauthenticated, display the login page
+  if (!currentUser) {
+    return <LoginPage onLoginSuccess={user => setCurrentUser(user)} />;
+  }
 
   const cartCount = cart.reduce((sum, i) => sum + i.quantity, 0);
 
@@ -265,10 +298,8 @@ export default function App() {
         cartCount={cartCount}
         onOpenCart={() => setIsCartOpen(true)}
         isConnected={isConnected}
-        onRefresh={() => {
-          fetchProducts();
-          fetchOrders();
-        }}
+        currentUser={currentUser}
+        onLogout={handleLogout}
       />
 
       {/* Main Container */}
@@ -278,21 +309,21 @@ export default function App() {
             products={products}
             cart={cart}
             onAddToCart={handleAddToCart}
-            onSeedCatalog={handleSeedCatalog}
             loading={loading}
           />
         )}
 
-        {activeTab === 'inventory' && (
+        {activeTab === 'inventory' && currentUser.role === 'admin' && (
           <InventoryManager
             products={products}
             onCreateProduct={handleCreateProduct}
             onUpdateProduct={handleUpdateProduct}
             onDeleteProduct={handleDeleteProduct}
-            onSeedCatalog={handleSeedCatalog}
             loading={loading}
           />
         )}
+
+        {activeTab === 'users' && currentUser.role === 'admin' && <UserManager />}
 
         {activeTab === 'orders' && (
           <OrdersList
@@ -301,13 +332,14 @@ export default function App() {
             onCancelOrder={handleCancelReservation}
             onOpenCheckout={order => {
               setActiveCheckoutOrder(order);
+              setLastPaymentResult(null);
               setIsCheckoutModalOpen(true);
             }}
             loading={loading}
           />
         )}
 
-        {activeTab === 'simulator' && (
+        {activeTab === 'simulator' && currentUser.role === 'admin' && (
           <ConcurrencySimulator
             products={products}
             onRefreshProducts={fetchProducts}
@@ -332,7 +364,11 @@ export default function App() {
       <CheckoutModal
         order={activeCheckoutOrder}
         isOpen={isCheckoutModalOpen}
-        onClose={() => setIsCheckoutModalOpen(false)}
+        onClose={() => {
+          setIsCheckoutModalOpen(false);
+          setActiveCheckoutOrder(null);
+          setLastPaymentResult(null);
+        }}
         onProcessPayment={handleProcessPayment}
         onCancelReservation={handleCancelReservation}
         onExpireReservation={handleExpireReservation}
@@ -343,8 +379,8 @@ export default function App() {
       {/* Footer */}
       <footer className="border-t border-slate-900 py-6 text-center text-xs text-slate-500">
         <p>
-          Point-of-Sale Order &amp; Inventory System &bull; Atomic Concurrency Guards &bull; 5-Minute
-          Stock Lock &bull; Mock Gateway Simulation
+          Point-of-Sale Order &amp; Inventory System &bull; Currency: LKR &bull; Concurrency Safe
+          &bull; 5-Minute Stock Lock &bull; RBAC Protected
         </p>
       </footer>
     </div>

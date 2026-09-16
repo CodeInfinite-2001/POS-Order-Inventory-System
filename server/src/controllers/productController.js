@@ -148,7 +148,7 @@ class ProductController {
         {
           name: 'iPhone 15 Pro Max',
           sku: 'PHONE-001',
-          price: 1199.99,
+          price: 385000.0,
           stock: 5, // Limited stock, perfect for concurrency stress test!
           availableStock: 5,
           reservedStock: 0,
@@ -158,7 +158,7 @@ class ProductController {
         {
           name: 'Sony WH-1000XM5 Headphones',
           sku: 'AUDIO-002',
-          price: 349.99,
+          price: 95000.0,
           stock: 12,
           availableStock: 12,
           reservedStock: 0,
@@ -168,7 +168,7 @@ class ProductController {
         {
           name: 'Logitech MX Master 3S Mouse',
           sku: 'PERIPH-003',
-          price: 99.99,
+          price: 28500.0,
           stock: 25,
           availableStock: 25,
           reservedStock: 0,
@@ -178,7 +178,7 @@ class ProductController {
         {
           name: 'Mechanical Gaming Keyboard',
           sku: 'KEYBD-004',
-          price: 149.5,
+          price: 32000.0,
           stock: 8,
           availableStock: 8,
           reservedStock: 0,
@@ -188,7 +188,7 @@ class ProductController {
         {
           name: 'Artisan Espresso Coffee Beans (1kg)',
           sku: 'FOOD-005',
-          price: 24.99,
+          price: 7500.0,
           stock: 50,
           availableStock: 50,
           reservedStock: 0,
@@ -198,7 +198,7 @@ class ProductController {
         {
           name: '4K Ultra-Wide Curved Monitor 34"',
           sku: 'DISP-006',
-          price: 499.0,
+          price: 145000.0,
           stock: 3, // Very limited stock!
           availableStock: 3,
           reservedStock: 0,

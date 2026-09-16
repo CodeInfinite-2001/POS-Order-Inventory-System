@@ -6,11 +6,11 @@ import {
   AlertCircle,
   Eye,
   RefreshCw,
-  CreditCard,
   Ban,
   X,
   History,
 } from 'lucide-react';
+import { formatLKR } from '../api/client';
 
 export default function OrdersList({
   orders,
@@ -89,7 +89,7 @@ export default function OrdersList({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-900/60 p-6 rounded-2xl border border-slate-800">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-900/60 p-6 rounded-3xl border border-slate-800">
         <div>
           <h2 className="text-xl font-bold text-white tracking-tight">
             Order Lifecycle Management
@@ -125,7 +125,7 @@ export default function OrdersList({
       </div>
 
       {/* Orders Table */}
-      <div className="overflow-hidden rounded-2xl bg-slate-900 border border-slate-800 shadow-xl">
+      <div className="overflow-hidden rounded-3xl bg-slate-900 border border-slate-800 shadow-xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-300">
             <thead className="bg-slate-800/80 text-xs uppercase font-semibold text-slate-400 border-b border-slate-700/80">
@@ -133,7 +133,7 @@ export default function OrdersList({
                 <th className="py-3.5 px-4">Order #</th>
                 <th className="py-3.5 px-4">Customer</th>
                 <th className="py-3.5 px-4">Items</th>
-                <th className="py-3.5 px-4">Total Amount</th>
+                <th className="py-3.5 px-4">Total (LKR)</th>
                 <th className="py-3.5 px-4">Current Status</th>
                 <th className="py-3.5 px-4">Created At</th>
                 <th className="py-3.5 px-4 text-right">Actions</th>
@@ -162,7 +162,7 @@ export default function OrdersList({
                       </span>
                     </td>
                     <td className="py-3 px-4 font-mono font-bold text-white">
-                      ${order.totalAmount.toFixed(2)}
+                      {formatLKR(order.totalAmount)}
                     </td>
                     <td className="py-3 px-4">{getStatusBadge(order)}</td>
                     <td className="py-3 px-4 text-xs text-slate-400 font-mono">
@@ -207,7 +207,7 @@ export default function OrdersList({
       {/* Audit Log Modal */}
       {selectedOrderForAudit && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-800 p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-slate-800 p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <History className="w-5 h-5 text-blue-400" />
@@ -261,7 +261,9 @@ export default function OrdersList({
                     <span className="text-white">
                       {item.quantity}x {item.name}
                     </span>
-                    <span className="font-mono text-slate-300">${item.subtotal.toFixed(2)}</span>
+                    <span className="font-mono text-slate-300">
+                      {formatLKR(item.subtotal)}
+                    </span>
                   </div>
                 ))}
               </div>

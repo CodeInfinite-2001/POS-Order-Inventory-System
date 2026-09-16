@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Search, Plus, Check, ShoppingBag, Sparkles, AlertCircle } from 'lucide-react';
+import { Search, Plus, Check, ShoppingBag, Sparkles } from 'lucide-react';
 import StockBadge from './StockBadge';
+import { formatLKR } from '../api/client';
 
 export default function Storefront({
   products,
   cart,
   onAddToCart,
-  onSeedCatalog,
   loading,
 }) {
   const [search, setSearch] = useState('');
@@ -26,18 +26,18 @@ export default function Storefront({
   return (
     <div className="space-y-6">
       {/* Top Banner / Hero */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-900/40 via-indigo-900/30 to-slate-900 border border-blue-500/20 p-6 sm:p-8">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-900/40 via-indigo-900/30 to-slate-900 border border-blue-500/20 p-6 sm:p-8">
         <div className="relative z-10 max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold mb-3">
             <Sparkles className="w-3.5 h-3.5" />
-            Live POS Retail Storefront
+            POS Storefront (LKR)
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-            High-Concurrency Point of Sale
+            Nexus Retail Storefront
           </h1>
           <p className="mt-2 text-sm sm:text-base text-slate-300">
-            Select products and proceed to checkout. The system guarantees atomic stock reservation
-            for 5 minutes, eliminating double-selling under concurrent customer traffic.
+            Select catalog products and proceed to checkout. The system guarantees atomic stock reservation
+            for 5 minutes, preventing overselling under high concurrency.
           </p>
         </div>
       </div>
@@ -76,33 +76,25 @@ export default function Storefront({
 
       {/* Catalog Grid */}
       {products.length === 0 && !loading ? (
-        <div className="text-center py-16 px-4 rounded-2xl bg-slate-900/50 border border-slate-800">
+        <div className="text-center py-16 px-4 rounded-3xl bg-slate-900/50 border border-slate-800">
           <ShoppingBag className="w-12 h-12 text-slate-500 mx-auto mb-3" />
           <h3 className="text-lg font-semibold text-white">Catalog is empty</h3>
           <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto">
-            Get started by generating sample products with realistic stock counts.
+            No products currently in inventory. Please contact an administrator to add items.
           </p>
-          <button
-            onClick={onSeedCatalog}
-            className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-all shadow-lg shadow-blue-600/20"
-          >
-            <Sparkles className="w-4 h-4" />
-            Seed Sample Retail Catalog
-          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredProducts.map(product => {
             const cartItem = cart.find(c => c.productId === product._id);
             const inCartQty = cartItem ? cartItem.quantity : 0;
-            const remainingAvailable = Math.max(0, product.availableStock - inCartQty);
             const isOutOfStock = product.availableStock <= 0;
             const isMaxInCart = inCartQty >= product.availableStock;
 
             return (
               <div
                 key={product._id}
-                className="group flex flex-col justify-between rounded-2xl bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 p-5 transition-all shadow-md hover:shadow-xl hover:shadow-blue-500/5"
+                className="group flex flex-col justify-between rounded-3xl bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 p-5 transition-all shadow-md hover:shadow-xl hover:shadow-blue-500/5"
               >
                 <div>
                   {/* Category & SKU Header */}
@@ -133,12 +125,12 @@ export default function Storefront({
                   </div>
                 </div>
 
-                {/* Footer: Price & Add to Cart Button */}
+                {/* Footer: Price in LKR & Add to Cart Button */}
                 <div className="mt-5 pt-4 border-t border-slate-800 flex items-center justify-between gap-3">
                   <div>
                     <span className="text-xs text-slate-400 block">Unit Price</span>
-                    <span className="text-lg font-extrabold text-white">
-                      ${product.price.toFixed(2)}
+                    <span className="text-base sm:text-lg font-extrabold text-white font-mono">
+                      {formatLKR(product.price)}
                     </span>
                   </div>
 
@@ -163,7 +155,7 @@ export default function Storefront({
                     ) : inCartQty > 0 ? (
                       <>
                         <Plus className="w-3.5 h-3.5" />
-                        <span>Add More ({inCartQty})</span>
+                        <span>Add ({inCartQty})</span>
                       </>
                     ) : (
                       <>
