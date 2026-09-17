@@ -128,11 +128,15 @@ async function initSchema() {
       history JSONB DEFAULT '[]'::jsonb,
       payment_details JSONB DEFAULT NULL,
       idempotency_key TEXT,
+      user_id TEXT,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
 
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS user_id TEXT;
+
     CREATE INDEX IF NOT EXISTS idx_orders_status_expires ON orders (status, expires_at);
+    CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders (user_id);
     CREATE INDEX IF NOT EXISTS idx_orders_order_number ON orders (order_number);
 
     CREATE TABLE IF NOT EXISTS payments (

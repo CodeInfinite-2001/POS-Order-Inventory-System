@@ -253,6 +253,17 @@ export default function App() {
     }
   };
 
+  // Complete / Fulfill Paid Order
+  const handleCompleteOrder = async orderId => {
+    try {
+      await api.completeOrder(orderId, `Order fulfilled by ${currentUser?.name || currentUser?.username}`);
+      await fetchProducts();
+      await fetchOrders();
+    } catch (err) {
+      alert(`Failed to complete order: ${err.message}`);
+    }
+  };
+
   // Product CRUD
   const handleCreateProduct = async productData => {
     try {
@@ -328,8 +339,10 @@ export default function App() {
         {activeTab === 'orders' && (
           <OrdersList
             orders={orders}
+            currentUser={currentUser}
             onRefresh={fetchOrders}
             onCancelOrder={handleCancelReservation}
+            onCompleteOrder={handleCompleteOrder}
             onOpenCheckout={order => {
               setActiveCheckoutOrder(order);
               setLastPaymentResult(null);

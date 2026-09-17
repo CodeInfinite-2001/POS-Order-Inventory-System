@@ -31,7 +31,7 @@ class PaymentController {
   // GET /api/payments/order/:orderId
   async getPaymentByOrderId(req, res, next) {
     try {
-      const payments = await Payment.find({ orderId: req.params.orderId }).sort({ createdAt: -1 });
+      const payments = await Payment.find({ orderId: req.params.orderId });
       res.json({ success: true, count: payments.length, payments });
     } catch (err) {
       next(err);

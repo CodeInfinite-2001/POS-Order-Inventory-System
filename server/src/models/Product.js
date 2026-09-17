@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { query } = require('../config/db');
+const { createQueryPromise } = require('./queryHelper');
 
 class Product {
   constructor(data = {}) {
@@ -112,27 +113,36 @@ class Product {
     return this;
   }
 
-  static async find(filter = {}) {
-    let sql = 'SELECT * FROM products WHERE 1=1';
-    const params = [];
-    let paramIndex = 1;
+  static find(filter = {}) {
+    return createQueryPromise(async ({ sortCriteria, limitCount }) => {
+      let sql = 'SELECT * FROM products WHERE 1=1';
+      const params = [];
+      let paramIndex = 1;
 
-    if (filter.category && filter.category !== 'All') {
-      sql += ` AND category = $${paramIndex++}`;
-      params.push(filter.category);
-    }
+      if (filter.category && filter.category !== 'All') {
+        sql += ` AND category = $${paramIndex++}`;
+        params.push(filter.category);
+      }
 
-    if (filter.search) {
-      sql += ` AND (LOWER(name) LIKE $${paramIndex} OR LOWER(sku) LIKE $${paramIndex})`;
-      params.push(`%${filter.search.toLowerCase()}%`);
-      paramIndex++;
-    }
+      if (filter.search) {
+        sql += ` AND (LOWER(name) LIKE $${paramIndex} OR LOWER(sku) LIKE $${paramIndex})`;
+        params.push(`%${filter.search.toLowerCase()}%`);
+        paramIndex++;
+      }
 
-    sql += ' ORDER BY name ASC';
-    const res = await query(sql, params);
-    const list = res.rows.map(r => Product._fromRow(r));
-    list.sort = function () { return list; }; // Chainable helper
-    return list;
+      if (sortCriteria && sortCriteria.name === -1) {
+        sql += ' ORDER BY name DESC';
+      } else {
+        sql += ' ORDER BY name ASC';
+      }
+
+      if (limitCount) {
+        sql += ` LIMIT ${parseInt(limitCount, 10)}`;
+      }
+
+      const res = await query(sql, params);
+      return res.rows.map(r => Product._fromRow(r));
+    });
   }
 
   static async findById(id) {

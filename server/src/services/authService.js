@@ -138,9 +138,9 @@ class AuthService {
    * Get all registered users from database
    */
   async listUsers() {
-    const users = await User.find().sort({ createdAt: -1 });
+    const users = await User.find();
     return users.map(u => ({
-      id: u._id.toString(),
+      id: (u._id || u.id).toString(),
       username: u.username,
       name: u.name,
       role: u.role,

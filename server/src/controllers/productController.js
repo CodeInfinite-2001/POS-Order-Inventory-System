@@ -162,7 +162,7 @@ class ProductController {
         await Product.findOneAndUpdate({ sku: p.sku }, p, { upsert: true, new: true });
       }
 
-      const all = await Product.find().sort({ name: 1 });
+      const all = await Product.find();
       res.json({
         success: true,
         message: 'Sample catalog seeded successfully with realistic stock levels',

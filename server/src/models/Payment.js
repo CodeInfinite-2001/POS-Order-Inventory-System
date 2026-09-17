@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { query } = require('../config/db');
+const { createQueryPromise } = require('./queryHelper');
 
 class Payment {
   constructor(data = {}) {
@@ -106,6 +107,34 @@ class Payment {
       );
     }
     return this;
+  }
+
+  static async findById(id) {
+    if (!id) return null;
+    const res = await query('SELECT * FROM payments WHERE id = $1 LIMIT 1', [String(id)]);
+    return res.rows.length > 0 ? Payment._fromRow(res.rows[0]) : null;
+  }
+
+  static find(filter = {}) {
+    return createQueryPromise(async ({ sortCriteria, limitCount }) => {
+      let sql = 'SELECT * FROM payments WHERE 1=1';
+      const params = [];
+      let paramIndex = 1;
+
+      if (filter.orderId) {
+        sql += ` AND order_id = $${paramIndex++}`;
+        params.push(String(filter.orderId));
+      }
+
+      sql += ' ORDER BY created_at DESC';
+
+      if (limitCount) {
+        sql += ` LIMIT ${parseInt(limitCount, 10)}`;
+      }
+
+      const res = await query(sql, params);
+      return res.rows.map(r => Payment._fromRow(r));
+    });
   }
 
   static async findOne(filter = {}) {

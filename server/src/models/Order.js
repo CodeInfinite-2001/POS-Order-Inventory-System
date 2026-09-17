@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { query } = require('../config/db');
+const { createQueryPromise } = require('./queryHelper');
 
 class Order {
   constructor(data = {}) {
@@ -7,6 +8,7 @@ class Order {
     this._id = this.id;
     this.orderNumber = data.orderNumber || data.order_number || '';
     this.customerName = data.customerName || data.customer_name || 'POS Customer';
+    this.userId = data.userId || data.user_id || null;
     this.totalAmount = parseFloat(data.totalAmount ?? data.total_amount) || 0;
     this.status = data.status || 'Reserved';
     this.expiresAt = data.expiresAt ? new Date(data.expiresAt) : data.expires_at ? new Date(data.expires_at) : new Date(Date.now() + 300000);
@@ -39,6 +41,7 @@ class Order {
       id: row.id,
       orderNumber: row.order_number,
       customerName: row.customer_name,
+      userId: row.user_id,
       totalAmount: parseFloat(row.total_amount),
       status: row.status,
       expiresAt: row.expires_at,
@@ -57,6 +60,7 @@ class Order {
       id: this.id,
       orderNumber: this.orderNumber,
       customerName: this.customerName,
+      userId: this.userId,
       totalAmount: this.totalAmount,
       status: this.status,
       expiresAt: this.expiresAt,
@@ -80,12 +84,13 @@ class Order {
     if (existing.rows.length === 0) {
       await query(
         `INSERT INTO orders 
-         (id, order_number, customer_name, total_amount, status, expires_at, items, history, payment_details, idempotency_key, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+         (id, order_number, customer_name, user_id, total_amount, status, expires_at, items, history, payment_details, idempotency_key, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
           this.id,
           this.orderNumber,
           this.customerName,
+          this.userId,
           this.totalAmount,
           this.status,
           this.expiresAt,
@@ -100,14 +105,15 @@ class Order {
     } else {
       await query(
         `UPDATE orders
-         SET order_number = $2, customer_name = $3, total_amount = $4, status = $5,
-             expires_at = $6, items = $7, history = $8, payment_details = $9,
-             idempotency_key = $10, updated_at = $11
+         SET order_number = $2, customer_name = $3, user_id = $4, total_amount = $5, status = $6,
+             expires_at = $7, items = $8, history = $9, payment_details = $10,
+             idempotency_key = $11, updated_at = $12
          WHERE id = $1`,
         [
           this.id,
           this.orderNumber,
           this.customerName,
+          this.userId,
           this.totalAmount,
           this.status,
           this.expiresAt,
@@ -195,28 +201,38 @@ class Order {
     return res.rows.length > 0 ? Order._fromRow(res.rows[0]) : null;
   }
 
-  static async find(filter = {}) {
-    let sql = 'SELECT * FROM orders WHERE 1=1';
-    const params = [];
-    let paramIndex = 1;
+  static find(filter = {}) {
+    return createQueryPromise(async ({ sortCriteria, limitCount }) => {
+      let sql = 'SELECT * FROM orders WHERE 1=1';
+      const params = [];
+      let paramIndex = 1;
 
-    if (filter.status) {
-      sql += ` AND status = $${paramIndex++}`;
-      params.push(filter.status);
-    }
+      if (filter.status) {
+        sql += ` AND status = $${paramIndex++}`;
+        params.push(filter.status);
+      }
+      if (filter.customerName) {
+        sql += ` AND LOWER(customer_name) LIKE $${paramIndex++}`;
+        params.push(`%${filter.customerName.toLowerCase()}%`);
+      }
+      if (filter.userId) {
+        sql += ` AND user_id = $${paramIndex++}`;
+        params.push(filter.userId);
+      }
 
-    sql += ' ORDER BY created_at DESC';
+      if (sortCriteria && sortCriteria.createdAt === 1) {
+        sql += ' ORDER BY created_at ASC';
+      } else {
+        sql += ' ORDER BY created_at DESC';
+      }
 
-    const res = await query(sql, params);
-    let orders = res.rows.map(r => Order._fromRow(r));
+      if (limitCount) {
+        sql += ` LIMIT ${parseInt(limitCount, 10)}`;
+      }
 
-    // Support chainable methods .sort() and .limit()
-    orders.sort = function () { return orders; };
-    orders.limit = function (num) {
-      return orders.slice(0, num);
-    };
-
-    return orders;
+      const res = await query(sql, params);
+      return res.rows.map(r => Order._fromRow(r));
+    });
   }
 
   static async findExpired(now = new Date(), limit = 50) {

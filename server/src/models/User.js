@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { query } = require('../config/db');
+const { createQueryPromise } = require('./queryHelper');
 
 class User {
   constructor(data = {}) {
@@ -93,11 +94,26 @@ class User {
     return res.rows.length > 0 ? User._fromRow(res.rows[0]) : null;
   }
 
-  static async find() {
-    const res = await query('SELECT * FROM users ORDER BY created_at DESC');
-    const users = res.rows.map(r => User._fromRow(r));
-    users.sort = function () { return users; }; // Chainable helper
-    return users;
+  static find(filter = {}) {
+    return createQueryPromise(async ({ sortCriteria, limitCount }) => {
+      let sql = 'SELECT * FROM users WHERE 1=1';
+      const params = [];
+      let paramIndex = 1;
+
+      if (filter.role) {
+        sql += ` AND role = $${paramIndex++}`;
+        params.push(filter.role);
+      }
+
+      sql += ' ORDER BY created_at DESC';
+
+      if (limitCount) {
+        sql += ` LIMIT ${parseInt(limitCount, 10)}`;
+      }
+
+      const res = await query(sql, params);
+      return res.rows.map(r => User._fromRow(r));
+    });
   }
 
   static async countDocuments() {

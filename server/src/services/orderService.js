@@ -7,7 +7,7 @@ class OrderService {
    * Creates an order and atomically reserves inventory for all items.
    * Standard reservation lock is 5 minutes (300 seconds), configurable for testing.
    */
-  async createOrder({ items, customerName = 'POS Customer', reservationDurationSec = 300 }) {
+  async createOrder({ items, customerName = 'POS Customer', userId = null, reservationDurationSec = 300 }) {
     if (!items || !Array.isArray(items) || items.length === 0) {
       const err = new Error('Order must contain at least one item');
       err.statusCode = 400;
@@ -62,6 +62,7 @@ class OrderService {
     const order = new Order({
       orderNumber,
       customerName,
+      userId,
       items: orderItems,
       totalAmount: calculatedTotal,
       status: 'Reserved',
@@ -180,14 +181,55 @@ class OrderService {
   }
 
   /**
+   * Complete / fulfill a Paid order
+   */
+  async completeOrder(orderId, reason = 'Order fulfilled and handed over to customer') {
+    let order = await Order.findById(orderId);
+    if (!order) {
+      const err = new Error('Order not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (order.status !== 'Paid') {
+      const err = new Error(`Cannot complete order with status '${order.status}'. Only 'Paid' orders can be marked as Completed.`);
+      err.statusCode = 409;
+      throw err;
+    }
+
+    const updatedOrder = await Order.findOneAndUpdate(
+      { _id: orderId, status: 'Paid' },
+      {
+        $set: { status: 'Completed' },
+        $push: {
+          history: {
+            status: 'Completed',
+            timestamp: new Date(),
+            reason,
+          },
+        },
+      },
+      { new: true }
+    );
+
+    return updatedOrder || (await Order.findById(orderId));
+  }
+
+  /**
    * List all orders, optionally filtered.
    */
   async listOrders(filters = {}) {
     const query = {};
-    if (filters.status) {
+    if (filters.status && filters.status !== 'All') {
       query.status = filters.status;
     }
-    const orders = await Order.find(query).sort({ createdAt: -1 });
+    if (filters.userId) {
+      query.userId = filters.userId;
+    }
+    if (filters.customerName) {
+      query.customerName = filters.customerName;
+    }
+    const orders = await Order.find(query);
 
     // Check expiry for any Reserved orders returned
     const now = new Date();

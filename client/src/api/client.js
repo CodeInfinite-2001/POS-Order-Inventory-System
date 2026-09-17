@@ -191,6 +191,15 @@ export const api = {
     return handleResponse(res);
   },
 
+  async completeOrder(id, reason) {
+    const res = await fetch(`${API_BASE}/orders/${id}/complete`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ reason }),
+    });
+    return handleResponse(res);
+  },
+
   // Payments
   async processPayment({ orderId, idempotencyKey, paymentMethod, outcome }) {
     const res = await fetch(`${API_BASE}/payments/process`, {
