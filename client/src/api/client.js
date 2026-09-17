@@ -2,7 +2,8 @@
  * API Client for POS Backend with Authentication & LKR Currency Support
  */
 
-const API_BASE = '/api';
+const VITE_API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+const API_BASE = VITE_API_URL ? `${VITE_API_URL}/api` : '/api';
 
 export const TOKEN_KEY = 'pos_auth_token';
 export const USER_KEY = 'pos_auth_user';

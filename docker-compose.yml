@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pos_app
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - MONGODB_URI=mongodb://mongo:27017/pos_system
+      - JWT_SECRET=pos-concurrency-safe-secret-key-987654321
+      - RESERVATION_DURATION_SEC=300
+      - EXPIRY_WORKER_INTERVAL_MS=5000
+    depends_on:
+      - mongo
+
+  mongo:
+    image: mongo:7
+    container_name: pos_mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+volumes:
+  mongo-data:

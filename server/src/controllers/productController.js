@@ -141,74 +141,27 @@ class ProductController {
     }
   }
 
+  // Automatic startup seeder if catalog is empty
+  async seedDefaultProducts() {
+    try {
+      const count = await Product.countDocuments();
+      if (count === 0) {
+        console.log('[Product] Empty catalog detected. Auto-seeding initial demo products...');
+        for (const p of DEMO_PRODUCTS) {
+          await Product.findOneAndUpdate({ sku: p.sku }, p, { upsert: true, new: true });
+        }
+        console.log(`[Product] Successfully auto-seeded ${DEMO_PRODUCTS.length} initial products.`);
+      }
+    } catch (err) {
+      console.error('[Product] Error auto-seeding products:', err.message);
+    }
+  }
+
   // POST /api/products/seed
   async seedProducts(req, res, next) {
     try {
-      const demoProducts = [
-        {
-          name: 'iPhone 15 Pro Max',
-          sku: 'PHONE-001',
-          price: 385000.0,
-          stock: 5, // Limited stock, perfect for concurrency stress test!
-          availableStock: 5,
-          reservedStock: 0,
-          category: 'Electronics',
-          description: 'Flagship smartphone with titanium design and A17 Pro chip. Limited stock!',
-        },
-        {
-          name: 'Sony WH-1000XM5 Headphones',
-          sku: 'AUDIO-002',
-          price: 95000.0,
-          stock: 12,
-          availableStock: 12,
-          reservedStock: 0,
-          category: 'Audio',
-          description: 'Industry-leading wireless noise-cancelling headphones.',
-        },
-        {
-          name: 'Logitech MX Master 3S Mouse',
-          sku: 'PERIPH-003',
-          price: 28500.0,
-          stock: 25,
-          availableStock: 25,
-          reservedStock: 0,
-          category: 'Accessories',
-          description: 'High-precision ergonomic wireless mouse for power users.',
-        },
-        {
-          name: 'Mechanical Gaming Keyboard',
-          sku: 'KEYBD-004',
-          price: 32000.0,
-          stock: 8,
-          availableStock: 8,
-          reservedStock: 0,
-          category: 'Accessories',
-          description: 'RGB hot-swappable mechanical keyboard with tactile switches.',
-        },
-        {
-          name: 'Artisan Espresso Coffee Beans (1kg)',
-          sku: 'FOOD-005',
-          price: 7500.0,
-          stock: 50,
-          availableStock: 50,
-          reservedStock: 0,
-          category: 'Beverages',
-          description: 'Single-origin specialty roasted whole espresso beans.',
-        },
-        {
-          name: '4K Ultra-Wide Curved Monitor 34"',
-          sku: 'DISP-006',
-          price: 145000.0,
-          stock: 3, // Very limited stock!
-          availableStock: 3,
-          reservedStock: 0,
-          category: 'Electronics',
-          description: 'Immersive curved productivity display with USB-C 90W delivery.',
-        },
-      ];
-
       // Upsert seed items
-      for (const p of demoProducts) {
+      for (const p of DEMO_PRODUCTS) {
         await Product.findOneAndUpdate({ sku: p.sku }, p, { upsert: true, new: true });
       }
 
@@ -223,5 +176,68 @@ class ProductController {
     }
   }
 }
+
+const DEMO_PRODUCTS = [
+  {
+    name: 'iPhone 15 Pro Max',
+    sku: 'PHONE-001',
+    price: 385000.0,
+    stock: 5, // Limited stock, perfect for concurrency stress test!
+    availableStock: 5,
+    reservedStock: 0,
+    category: 'Electronics',
+    description: 'Flagship smartphone with titanium design and A17 Pro chip. Limited stock!',
+  },
+  {
+    name: 'Sony WH-1000XM5 Headphones',
+    sku: 'AUDIO-002',
+    price: 95000.0,
+    stock: 12,
+    availableStock: 12,
+    reservedStock: 0,
+    category: 'Audio',
+    description: 'Industry-leading wireless noise-cancelling headphones.',
+  },
+  {
+    name: 'Logitech MX Master 3S Mouse',
+    sku: 'PERIPH-003',
+    price: 28500.0,
+    stock: 25,
+    availableStock: 25,
+    reservedStock: 0,
+    category: 'Accessories',
+    description: 'High-precision ergonomic wireless mouse for power users.',
+  },
+  {
+    name: 'Mechanical Gaming Keyboard',
+    sku: 'KEYBD-004',
+    price: 32000.0,
+    stock: 8,
+    availableStock: 8,
+    reservedStock: 0,
+    category: 'Accessories',
+    description: 'RGB hot-swappable mechanical keyboard with tactile switches.',
+  },
+  {
+    name: 'Artisan Espresso Coffee Beans (1kg)',
+    sku: 'FOOD-005',
+    price: 7500.0,
+    stock: 50,
+    availableStock: 50,
+    reservedStock: 0,
+    category: 'Beverages',
+    description: 'Single-origin specialty roasted whole espresso beans.',
+  },
+  {
+    name: '4K Ultra-Wide Curved Monitor 34"',
+    sku: 'DISP-006',
+    price: 145000.0,
+    stock: 3, // Very limited stock!
+    availableStock: 3,
+    reservedStock: 0,
+    category: 'Electronics',
+    description: 'Immersive curved productivity display with USB-C 90W delivery.',
+  },
+];
 
 module.exports = new ProductController();

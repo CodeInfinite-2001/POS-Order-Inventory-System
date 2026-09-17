@@ -9,16 +9,41 @@ let mongoServerInstance = null;
  * all ACID transactions and atomic operations work out of the box.
  */
 async function connectDB() {
-  const uri = process.env.MONGODB_URI;
+  const uri =
+    process.env.MONGODB_URI ||
+    process.env.MONGO_URL ||
+    process.env.MONGO_PRIVATE_URL ||
+    process.env.MONGODB_URL ||
+    process.env.DATABASE_URL;
 
   if (uri) {
-    console.log('[DB] Connecting to MongoDB from MONGODB_URI...');
-    await mongoose.connect(uri);
-    console.log('[DB] Connected to MongoDB:', mongoose.connection.host);
-    return;
+    const sourceVar = process.env.MONGODB_URI
+      ? 'MONGODB_URI'
+      : process.env.MONGO_URL
+      ? 'MONGO_URL'
+      : process.env.MONGO_PRIVATE_URL
+      ? 'MONGO_PRIVATE_URL'
+      : process.env.MONGODB_URL
+      ? 'MONGODB_URL'
+      : 'DATABASE_URL';
+
+    // Mask credentials in log
+    const maskedUri = uri.replace(/\/\/([^:]+):([^@]+)@/, '//$1:***@');
+    console.log(`[DB] Connecting to MongoDB using ${sourceVar} (${maskedUri})...`);
+
+    try {
+      await mongoose.connect(uri, {
+        serverSelectionTimeoutMS: 15000,
+      });
+      console.log('[DB] Connected successfully to MongoDB host:', mongoose.connection.host);
+      return;
+    } catch (err) {
+      console.error('[DB] Failed to connect to remote MongoDB:', err.message);
+      throw err;
+    }
   }
 
-  console.log('[DB] No MONGODB_URI provided. Initializing in-memory MongoDB instance...');
+  console.log('[DB] No MONGODB_URI or MONGO_URL provided. Initializing in-memory MongoDB instance...');
   try {
     const { MongoMemoryReplSet, MongoMemoryServer } = require('mongodb-memory-server');
     

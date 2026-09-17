@@ -285,8 +285,19 @@ docker build -t pos-order-system .
 docker run -d -p 5000:5000 -e PORT=5000 --name pos-app pos-order-system
 ```
 
+### Railway Deployment (Frontend + Backend + Database)
+The repository includes full Railway configuration (`railway.json`, `.dockerignore`, `Dockerfile`):
+1. Push repository to GitHub.
+2. In [Railway.app](https://railway.app), click **"+ New Project"** ➔ **"Deploy from GitHub repo"**.
+3. In the project canvas, click **"+ New"** ➔ **"Database"** ➔ **"Add MongoDB"**.
+4. In your Web Service variables, click **"+ New Variable"** ➔ **"Add Reference"** ➔ select `MONGO_URL`.
+5. Under **"Settings"** ➔ **"Networking"**, click **"Generate Domain"**.
+6. Visit your Railway HTTPS domain! Default login: `admin` / `admin123`.
+
+👉 **See the complete step-by-step guide with diagrams in [RAILWAY_DEPLOY.md](RAILWAY_DEPLOY.md)**.
+
 ### Render.com Cloud Deployment
-The repository includes a [`render.yaml`](file:///e:/POS%20Order%20&%20Inventory%20System/render.yaml) blueprint:
+The repository includes a [`render.yaml`](render.yaml) blueprint:
 1. Push repository to GitHub.
 2. Link your repository in the Render.com dashboard.
 3. Select **Blueprint** deployment — Render will automatically build the client and deploy the Node.js backend.
