@@ -16,15 +16,14 @@ function errorHandler(err, req, res, next) {
     });
   }
 
-  // Mongoose Duplicate Key Error (e.g., duplicate SKU or duplicate idempotencyKey)
-  if (err.code === 11000) {
-    const field = Object.keys(err.keyValue || {})[0] || 'field';
-    const value = err.keyValue ? err.keyValue[field] : '';
+  // PostgreSQL / Database Duplicate Key Error (e.g., duplicate SKU, username, or idempotencyKey)
+  if (err.code === '23505' || err.code === 11000) {
+    const detail = err.detail || '';
     return res.status(409).json({
       success: false,
-      message: `Duplicate entry for ${field}: "${value}"`,
+      message: detail || 'A record with this unique value already exists.',
       code: 'DUPLICATE_KEY_ERROR',
-      field,
+      detail,
     });
   }
 

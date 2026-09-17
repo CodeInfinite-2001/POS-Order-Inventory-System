@@ -14,13 +14,10 @@ class ProductController {
         filter.category = category;
       }
       if (search) {
-        filter.$or = [
-          { name: { $regex: search, $options: 'i' } },
-          { sku: { $regex: search, $options: 'i' } },
-        ];
+        filter.search = search;
       }
 
-      const products = await Product.find(filter).sort({ name: 1 });
+      const products = await Product.find(filter);
       res.json({
         success: true,
         count: products.length,

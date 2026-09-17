@@ -1,6 +1,6 @@
 # 🚀 Concurrency-Safe POS Order & Inventory System
 
-A production-grade, concurrency-safe Point-of-Sale (POS) system built with **Express.js**, **MongoDB**, and a modern **React (Vite + Tailwind CSS)** frontend. 
+A production-grade, concurrency-safe Point-of-Sale (POS) system built with **Express.js**, **PostgreSQL**, and a modern **React (Vite + Tailwind CSS)** frontend. 
 
 The system features **atomic stock reservations**, **compensating rollback transactions**, a **dual-layer 5-minute reservation expiry engine**, **mock payment processing with idempotency guards**, **role-based user authentication (User & Admin)** with **admin-only user registration**, **LKR currency formatting**, and an interactive **real-time race condition stress simulator**.
 
@@ -24,16 +24,16 @@ The system features **atomic stock reservations**, **compensating rollback trans
 
 ## 🌟 Key Highlights
 
-- **Zero-Overselling Concurrency Engine**: Guaranteed stock safety using MongoDB atomic conditional updates (`{ availableStock: { $gte: quantity } }`).
+- **Zero-Overselling Concurrency Engine**: Guaranteed stock safety using PostgreSQL atomic conditional updates (`WHERE available_stock >= qty RETURNING *`).
 - **5-Minute Stock Reservation**: Items added to checkout are temporarily reserved for 300 seconds. Abandoned reservations auto-expire via a background cron worker or lazy on-access checks.
 - **Role-Based Authentication (User vs. Admin)**:
   - Secure password hashing via Node.js built-in `crypto.pbkdf2Sync` (SHA-512, 10,000 iterations, 16-byte random salt).
   - Tamper-proof HMAC-SHA256 bearer tokens.
-  - **Admin-Exclusive Signup**: Only administrators can register new user accounts; all credentials and permissions are persisted in MongoDB.
+  - **Admin-Exclusive Signup**: Only administrators can register new user accounts; all credentials and permissions are persisted in PostgreSQL.
 - **Idempotent Payment Processing**: Prevents double-billing using unique `idempotencyKey` indexing with simulated outcomes (`success`, `failure`, `timeout`).
 - **Dismissible Checkout Modal**: Easily close or return to the storefront after paying or cancelling reservations.
 - **Localized Sri Lankan Rupee (LKR)**: All catalog items, cart subtotals, order ledgers, and checkout totals are formatted as `LKR X,XXX.XX`.
-- **Zero-Config Database**: Automatically spins up an embedded in-memory MongoDB replica set if no `MONGODB_URI` is provided.
+- **Zero-Config Embedded Database**: Automatically starts embedded **PGlite** (PostgreSQL in WASM) if no `DATABASE_URL` is provided. Zero setup needed for local development!
 
 ---
 
@@ -251,7 +251,7 @@ Admins can access the **"Concurrency Simulator"** tab in the web UI to test flas
 
 ### Prerequisites
 - **Node.js**: v18+ (tested on Node v20 LTS)
-- *(Optional)* **MongoDB**: If `MONGODB_URI` is omitted, the app starts an embedded in-memory MongoDB replica set automatically.
+- *(Optional)* **PostgreSQL**: If `DATABASE_URL` is omitted, the app starts an embedded **PGlite** (PostgreSQL in WebAssembly) automatically with local persistence.
 
 ### Installation
 ```bash
@@ -285,12 +285,12 @@ docker build -t pos-order-system .
 docker run -d -p 5000:5000 -e PORT=5000 --name pos-app pos-order-system
 ```
 
-### Railway Deployment (Frontend + Backend + Database)
+### Railway Deployment (Frontend + Backend + PostgreSQL Database)
 The repository includes full Railway configuration (`railway.json`, `.dockerignore`, `Dockerfile`):
 1. Push repository to GitHub.
 2. In [Railway.app](https://railway.app), click **"+ New Project"** ➔ **"Deploy from GitHub repo"**.
-3. In the project canvas, click **"+ New"** ➔ **"Database"** ➔ **"Add MongoDB"**.
-4. In your Web Service variables, click **"+ New Variable"** ➔ **"Add Reference"** ➔ select `MONGO_URL`.
+3. In the project canvas, click **"+ New"** ➔ **"Database"** ➔ **"Add PostgreSQL"**.
+4. In your Web Service variables, click **"+ New Variable"** ➔ **"Add Reference"** ➔ select `DATABASE_URL`.
 5. Under **"Settings"** ➔ **"Networking"**, click **"Generate Domain"**.
 6. Visit your Railway HTTPS domain! Default login: `admin` / `admin123`.
 

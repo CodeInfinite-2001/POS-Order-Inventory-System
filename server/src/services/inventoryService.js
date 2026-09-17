@@ -1,9 +1,10 @@
 const Product = require('../models/Product');
+const { query } = require('../config/db');
 
 /**
- * Concurrency-safe inventory management service.
- * Uses atomic MongoDB operations ($gte query guard with $inc) to guarantee
- * that no overselling can ever happen, even under intense concurrent load.
+ * Concurrency-safe inventory management service for PostgreSQL.
+ * Uses atomic SQL conditional updates ("WHERE available_stock >= qty RETURNING *")
+ * to guarantee that no overselling can ever happen, even under intense concurrent load.
  */
 class InventoryService {
   /**
@@ -12,10 +13,9 @@ class InventoryService {
    * any items reserved earlier in this batch are rolled back immediately.
    *
    * @param {Array<{ productId: string, quantity: number }>} items
-   * @param {object|null} session - Optional MongoDB transaction session
    * @returns {Promise<Array<object>>} Updated products
    */
-  async reserveStockForItems(items, session = null) {
+  async reserveStockForItems(items) {
     const reservedItems = [];
 
     try {
@@ -25,22 +25,18 @@ class InventoryService {
           throw new Error(`Invalid reservation quantity: ${qty}`);
         }
 
-        // Atomic conditional update: only decrement if availableStock >= qty
-        const updatedProduct = await Product.findOneAndUpdate(
-          {
-            _id: item.productId,
-            availableStock: { $gte: qty },
-          },
-          {
-            $inc: {
-              availableStock: -qty,
-              reservedStock: qty,
-            },
-          },
-          { new: true, session }
+        // Atomic conditional update in PostgreSQL
+        const res = await query(
+          `UPDATE products
+           SET available_stock = available_stock - $1,
+               reserved_stock = reserved_stock + $1,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $2 AND available_stock >= $1
+           RETURNING *`,
+          [qty, String(item.productId)]
         );
 
-        if (!updatedProduct) {
+        if (res.rows.length === 0) {
           const currentProd = await Product.findById(item.productId);
           const name = currentProd ? currentProd.name : item.productId;
           const available = currentProd ? currentProd.availableStock : 0;
@@ -53,6 +49,7 @@ class InventoryService {
           throw err;
         }
 
+        const updatedProduct = Product._fromRow(res.rows[0]);
         reservedItems.push({
           productId: item.productId,
           quantity: qty,
@@ -65,15 +62,13 @@ class InventoryService {
       // Compensating rollback for any items reserved before the failure
       for (const reserved of reservedItems) {
         try {
-          await Product.findByIdAndUpdate(
-            reserved.productId,
-            {
-              $inc: {
-                availableStock: reserved.quantity,
-                reservedStock: -reserved.quantity,
-              },
-            },
-            { session }
+          await query(
+            `UPDATE products
+             SET available_stock = available_stock + $1,
+                 reserved_stock = reserved_stock - $1,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = $2`,
+            [reserved.quantity, String(reserved.productId)]
           );
         } catch (rollbackErr) {
           console.error('[InventoryService] Rollback error for product:', reserved.productId, rollbackErr);
@@ -88,23 +83,23 @@ class InventoryService {
    * Used when an order expires, is cancelled, or payment fails.
    *
    * @param {Array<{ productId: string, quantity: number }>} items
-   * @param {object|null} session - Optional MongoDB session
    */
-  async releaseReservedStock(items, session = null) {
+  async releaseReservedStock(items) {
     const results = [];
     for (const item of items) {
       const qty = parseInt(item.quantity, 10);
-      const updated = await Product.findByIdAndUpdate(
-        item.productId,
-        {
-          $inc: {
-            availableStock: qty,
-            reservedStock: -qty,
-          },
-        },
-        { new: true, session }
+      const res = await query(
+        `UPDATE products
+         SET available_stock = available_stock + $1,
+             reserved_stock = reserved_stock - $1,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2
+         RETURNING *`,
+        [qty, String(item.productId)]
       );
-      results.push(updated);
+      if (res.rows.length > 0) {
+        results.push(Product._fromRow(res.rows[0]));
+      }
     }
     return results;
   }
@@ -115,23 +110,23 @@ class InventoryService {
    * Available stock was already decremented during reservation.
    *
    * @param {Array<{ productId: string, quantity: number }>} items
-   * @param {object|null} session - Optional MongoDB session
    */
-  async finalizeReservedStock(items, session = null) {
+  async finalizeReservedStock(items) {
     const results = [];
     for (const item of items) {
       const qty = parseInt(item.quantity, 10);
-      const updated = await Product.findByIdAndUpdate(
-        item.productId,
-        {
-          $inc: {
-            stock: -qty,
-            reservedStock: -qty,
-          },
-        },
-        { new: true, session }
+      const res = await query(
+        `UPDATE products
+         SET stock = stock - $1,
+             reserved_stock = reserved_stock - $1,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2
+         RETURNING *`,
+        [qty, String(item.productId)]
       );
-      results.push(updated);
+      if (res.rows.length > 0) {
+        results.push(Product._fromRow(res.rows[0]));
+      }
     }
     return results;
   }
@@ -142,16 +137,19 @@ class InventoryService {
   async getStockStatus(productId) {
     const product = await Product.findById(productId);
     if (!product) {
-      const err = new Error('Product not found');
+      const err = new Error(`Product not found: ${productId}`);
       err.statusCode = 404;
       throw err;
     }
+
     return {
-      productId: product._id,
+      productId: product.id,
       name: product.name,
+      sku: product.sku,
       stock: product.stock,
       reservedStock: product.reservedStock,
       availableStock: product.availableStock,
+      isAvailable: product.availableStock > 0,
     };
   }
 }

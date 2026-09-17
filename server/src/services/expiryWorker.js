@@ -11,10 +11,7 @@ async function checkExpiredReservations() {
   try {
     const now = new Date();
     // Find all active orders whose reservation expiry time has passed
-    const expiredOrders = await Order.find({
-      status: 'Reserved',
-      expiresAt: { $lte: now },
-    }).limit(50);
+    const expiredOrders = await Order.findExpired(now, 50);
 
     if (expiredOrders.length > 0) {
       console.log(`[ExpiryWorker] Found ${expiredOrders.length} expired reservation(s) to release.`);
